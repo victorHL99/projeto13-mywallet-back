@@ -51,6 +51,8 @@ app.post("/", async (req, res) => {
         if(validarEmail && bcrypt.compareSync(senha, validarEmail.senha)){
             const token = v4();
             res.status(200).send(token);
+            await db.collection("registros").insertOne({token, IdUsuario: validarEmail._id});
+            await dataBase.collection("logs").insertOne({token, IdUsuario: validarEmail._id, dia: dayjs().format("DD/MM")});
         } else {
         res.status(404).send("Usuário não encontrado");
         return;
@@ -108,7 +110,34 @@ app.post("/registrar", async (req, res) => {
     }
 })
 
+app.get("/paginaPrincipal", async (req, res) => {
+    const {Autorization} = req.headers;
+    const token = Autorization.replace("Bearer ", "").trim();
 
+    if(!token){
+        res.status(401).send("Não autorizado");
+        return;
+    }
+
+    const logs = await dataBase.collection("logs").findOne({token}).toArray();
+    if(!logs){
+        res.status(401).send("Não autorizado");
+        return;
+    }
+
+    const usuario = await dataBase.collection("usuarios").findOne({_id: logs.IdUsuario});
+    if(!usuario){
+        res.status(404).send("Usuário não encontrado");
+        return;
+    }
+
+    const registros = await dataBase.collection("registros").findOne({_id: logs.IdUsuario});
+
+    delete usuarios._id;
+    delete usuarios.senha;
+
+    res.status(200).send({usuario, registros});
+})
 
 app.listen(process.env.PORTA, () => {
     console.log(chalk.blue.bold("Servidor iniciado na porta 5000"))
